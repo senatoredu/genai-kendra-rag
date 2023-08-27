@@ -1,0 +1,79 @@
+##This CloudFormation template creates an Amazon Kendra index. 
+##The output of the CloudFormation template shows the Kendra index id and the AWS region it was created in.
+##It takes about 30 minutes to create an Amazon Kendra index 
+Resources:
+  ##Create the Role needed to create a Kendra Index
+  KendraIndexRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: kendra.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': 'Kendra'
+                Action:
+                  - 'cloudwatch:PutMetricData'
+              - Effect: Allow
+                Resource: '*'
+                Action: 'logs:DescribeLogGroups'
+              - Effect: Allow
+                Resource: !Sub
+                  - 'arn:aws:logs:${region}:${account}:log-group:/aws/kendra/*'
+                  - region: !Ref 'AWS::Region'
+                    account: !Ref 'AWS::AccountId'
+                Action: 'logs:CreateLogGroup'
+              - Effect: Allow
+                Resource: !Sub
+                  - 'arn:aws:logs:${region}:${account}:log-group:/aws/kendra/*:log-stream:*'
+                  - region: !Ref 'AWS::Region'
+                    account: !Ref 'AWS::AccountId'
+                Action: 
+                  - 'logs:DescribeLogStreams'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+          PolicyName: !Join
+            - ''
+            - - !Ref 'AWS::StackName'
+              - '-DocsKendraIndexPolicy'
+      RoleName: !Join
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-DocsKendraIndexRole'
+      
+  ##Create the Kendra Index
+  DocsKendraIndex:
+    Type: 'AWS::Kendra::Index'
+    Properties:
+      Name: !Join
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-Index'
+      Edition: !Ref KendraEdition
+      RoleArn: !GetAtt KendraIndexRole.Arn
+    
+Parameters:
+  KendraEdition:
+    Type: String
+    Default: 'ENTERPRISE_EDITION'
+    AllowedValues:
+      - 'ENTERPRISE_EDITION'
+      - 'DEVELOPER_EDITION'
+    Description: 'ENTERPRISE_EDITION (default) is recommended for production deployments, and offers high availability and scale up capabilities. DEVELOPER_EDITION (Free Tier eligible) is suitable for temporary, non-production, experimental workloads. NOTE: indexes cannot currently be migrated from one type to another.'
+
+Outputs:
+  KendraIndexID:
+    Value: !GetAtt DocsKendraIndex.Id
+  AWSRegion:
+    Value: !Ref 'AWS::Region'
